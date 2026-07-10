@@ -5,28 +5,38 @@ function clean(value) {
   return String(value ?? '').trim();
 }
 
-async function sendMessage(chatId, text) {
+async function telegram(method, payload) {
   const response = await fetch(
-    `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
+    `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
   const result = await response.json();
 
   if (!response.ok || !result.ok) {
-    console.error('Telegram sendMessage error:', result);
-    return false;
+    console.error(`Telegram ${method} error:`, result);
+    return null;
   }
 
-  return true;
+  return result.result;
+}
+
+async function sendMessage(chatId, text, extra = {}) {
+  return telegram('sendMessage', {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+    ...extra,
+  });
+}
+
+function extractClientId(text) {
+  const match = String(text || '').match(/\[CLIENT_ID:(-?\d+)\]/);
+  return match ? match[1] : null;
 }
 
 module.exports = async function handler(req, res) {
@@ -44,6 +54,7 @@ module.exports = async function handler(req, res) {
 
     if (!BOT_TOKEN || !OWNER_CHAT_ID) {
       console.error('Missing BOT_TOKEN or OWNER_CHAT_ID');
+
       return res.status(500).json({
         ok: false,
         error: 'Environment variables are missing',
@@ -106,45 +117,62 @@ module.exports = async function handler(req, res) {
 Username: ${username}
 Chat ID: ${fromChatId}
 
-Для ответа:
-/reply ${fromChatId} текст ответа`
+Чтобы ответить, нажмите «Ответить» на это сообщение.
+
+[CLIENT_ID:${fromChatId}]`
         );
       }
 
       return res.status(200).json({ ok: true });
     }
 
-    if (
-      fromChatId === String(OWNER_CHAT_ID) &&
-      text.startsWith('/reply ')
-    ) {
-      const [, targetChatId, ...replyParts] = text.split(' ');
-      const replyText = replyParts.join(' ').trim();
+    if (fromChatId === String(OWNER_CHAT_ID)) {
+      const repliedText = message.reply_to_message?.text;
+      const targetChatId = extractClientId(repliedText);
 
-      if (!targetChatId || !replyText) {
+      if (targetChatId && text) {
+        const sent = await sendMessage(targetChatId, text);
+
         await sendMessage(
           OWNER_CHAT_ID,
-          'Формат ответа:\n/reply CHAT_ID текст сообщения'
+          sent
+            ? 'Ответ отправлен клиенту.'
+            : 'Не удалось отправить ответ клиенту.'
         );
 
         return res.status(200).json({ ok: true });
       }
 
-      const sent = await sendMessage(targetChatId, replyText);
+      if (text.startsWith('/reply ')) {
+        const [, fallbackChatId, ...replyParts] = text.split(' ');
+        const replyText = replyParts.join(' ').trim();
 
-      await sendMessage(
-        OWNER_CHAT_ID,
-        sent
-          ? 'Ответ отправлен клиенту.'
-          : 'Не удалось отправить ответ клиенту.'
-      );
+        if (!fallbackChatId || !replyText) {
+          await sendMessage(
+            OWNER_CHAT_ID,
+            'Формат:\n/reply CHAT_ID текст сообщения'
+          );
+
+          return res.status(200).json({ ok: true });
+        }
+
+        const sent = await sendMessage(fallbackChatId, replyText);
+
+        await sendMessage(
+          OWNER_CHAT_ID,
+          sent
+            ? 'Ответ отправлен клиенту.'
+            : 'Не удалось отправить ответ клиенту.'
+        );
+
+        return res.status(200).json({ ok: true });
+      }
 
       return res.status(200).json({ ok: true });
     }
 
-    if (fromChatId !== String(OWNER_CHAT_ID)) {
-      await sendMessage(
-        OWNER_CHAT_ID,
+    await sendMessage(
+      OWNER_CHAT_ID,
 `Сообщение от клиента
 
 Имя: ${name}
@@ -154,10 +182,10 @@ Chat ID: ${fromChatId}
 Сообщение:
 ${text || '[не текстовое сообщение]'}
 
-Ответить:
-/reply ${fromChatId} ваш текст`
-      );
-    }
+Чтобы ответить, нажмите «Ответить» на это сообщение.
+
+[CLIENT_ID:${fromChatId}]`
+    );
 
     return res.status(200).json({ ok: true });
   } catch (error) {
