@@ -1,8 +1,8 @@
-const BOT_TOKEN = process.env.BOT_TOKEN;
+﻿const BOT_TOKEN = process.env.BOT_TOKEN;
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID;
 
 function clean(value) {
-  return String(value || '').trim();
+  return String(value ?? '').trim();
 }
 
 async function sendMessage(chatId, text) {
@@ -19,83 +19,136 @@ async function sendMessage(chatId, text) {
     }
   );
 
-  return response.ok;
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    console.error('Telegram sendMessage error:', result);
+    return false;
+  }
+
+  return true;
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(200).json({ ok: true });
-  }
+  try {
+    console.log('Webhook method:', req.method);
+    console.log('Webhook body:', JSON.stringify(req.body));
 
-  const message = req.body?.message;
-
-  if (!message || !BOT_TOKEN || !OWNER_CHAT_ID) {
-    return res.status(200).json({ ok: true });
-  }
-
-  const fromChatId = String(message.chat.id);
-  const text = clean(message.text);
-
-  const name =
-    [message.from?.first_name, message.from?.last_name]
-      .filter(Boolean)
-      .join(' ') || 'Без имени';
-
-  const username = message.from?.username
-    ? `@${message.from.username}`
-    : 'не указан';
-
-  if (text === '/start') {
-    await sendMessage(
-      fromChatId,
-      'Здравствуйте! Напишите ваш вопрос или опишите задачу. Я отвечу вам здесь от лица Cepanov Tech.'
-    );
-
-    if (fromChatId !== String(OWNER_CHAT_ID)) {
-      await sendMessage(
-        OWNER_CHAT_ID,
-        `Новый пользователь\n\nИмя: ${name}\nUsername: ${username}\nChat ID: ${fromChatId}\n\nДля ответа:\n/reply ${fromChatId} текст ответа`
-      );
+    if (req.method === 'GET') {
+      return res.status(200).json({
+        ok: true,
+        service: 'cepanovtech_bot',
+      });
     }
 
-    return res.status(200).json({ ok: true });
-  }
+    if (req.method !== 'POST') {
+      return res.status(405).json({ ok: false });
+    }
 
-  if (
-    fromChatId === String(OWNER_CHAT_ID) &&
-    text.startsWith('/reply ')
-  ) {
-    const parts = text.split(' ');
-    const targetChatId = parts[1];
-    const replyText = parts.slice(2).join(' ').trim();
+    if (!BOT_TOKEN || !OWNER_CHAT_ID) {
+      console.error('Missing BOT_TOKEN or OWNER_CHAT_ID');
+      return res.status(500).json({
+        ok: false,
+        error: 'Environment variables are missing',
+      });
+    }
 
-    if (!targetChatId || !replyText) {
+    const message =
+      typeof req.body === 'string'
+        ? JSON.parse(req.body).message
+        : req.body?.message;
+
+    if (!message) {
+      return res.status(200).json({ ok: true });
+    }
+
+    const fromChatId = String(message.chat.id);
+    const text = clean(message.text);
+
+    const name =
+      [message.from?.first_name, message.from?.last_name]
+        .filter(Boolean)
+        .join(' ') || 'ез имени';
+
+    const username = message.from?.username
+      ? `@${message.from.username}`
+      : 'не указан';
+
+    if (text === '/start') {
+      await sendMessage(
+        fromChatId,
+        'дравствуйте! апишите ваш вопрос или опишите задачу.  отвечу вам здесь от лица Cepanov Tech.'
+      );
+
+      if (fromChatId !== String(OWNER_CHAT_ID)) {
+        await sendMessage(
+          OWNER_CHAT_ID,
+          `овый пользователь
+
+мя: ${name}
+Username: ${username}
+Chat ID: ${fromChatId}
+
+ля ответа:
+/reply ${fromChatId} текст ответа`
+        );
+      }
+
+      return res.status(200).json({ ok: true });
+    }
+
+    if (
+      fromChatId === String(OWNER_CHAT_ID) &&
+      text.startsWith('/reply ')
+    ) {
+      const [, targetChatId, ...replyParts] = text.split(' ');
+      const replyText = replyParts.join(' ').trim();
+
+      if (!targetChatId || !replyText) {
+        await sendMessage(
+          OWNER_CHAT_ID,
+          'равильный формат:\n/reply CHAT_ID текст сообщения'
+        );
+
+        return res.status(200).json({ ok: true });
+      }
+
+      const sent = await sendMessage(targetChatId, replyText);
+
       await sendMessage(
         OWNER_CHAT_ID,
-        'Правильный формат:\n/reply CHAT_ID текст сообщения'
+        sent
+          ? 'твет отправлен клиенту.'
+          : 'е удалось отправить ответ клиенту.'
       );
 
       return res.status(200).json({ ok: true });
     }
 
-    const sent = await sendMessage(targetChatId, replyText);
+    if (fromChatId !== String(OWNER_CHAT_ID)) {
+      await sendMessage(
+        OWNER_CHAT_ID,
+        `Сообщение от клиента
 
-    await sendMessage(
-      OWNER_CHAT_ID,
-      sent
-        ? 'Ответ отправлен клиенту.'
-        : 'Не удалось отправить ответ.'
-    );
+мя: ${name}
+Username: ${username}
+Chat ID: ${fromChatId}
+
+Сообщение:
+${text || '[не текстовое сообщение]'}
+
+тветить:
+/reply ${fromChatId} ваш текст`
+      );
+    }
 
     return res.status(200).json({ ok: true });
-  }
+  } catch (error) {
+    console.error('Webhook processing error:', error);
 
-  if (fromChatId !== String(OWNER_CHAT_ID)) {
-    await sendMessage(
-      OWNER_CHAT_ID,
-      `Сообщение от клиента\n\nИмя: ${name}\nUsername: ${username}\nChat ID: ${fromChatId}\n\nСообщение:\n${text || '[не текстовое сообщение]'}\n\nОтветить:\n/reply ${fromChatId} ваш текст`
-    );
+    return res.status(200).json({
+      ok: false,
+      error: 'Webhook processing failed',
+    });
   }
-
-  return res.status(200).json({ ok: true });
 };
