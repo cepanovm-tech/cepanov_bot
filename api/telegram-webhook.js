@@ -68,7 +68,7 @@ module.exports = async function handler(req, res) {
     const name =
       [message.from?.first_name, message.from?.last_name]
         .filter(Boolean)
-        .join(' ') || 'ез имени';
+        .join(' ') || 'Без имени';
 
     const username = message.from?.username
       ? `@${message.from.username}`
@@ -77,19 +77,29 @@ module.exports = async function handler(req, res) {
     if (text === '/start') {
       await sendMessage(
         fromChatId,
-        'дравствуйте! апишите ваш вопрос или опишите задачу.  отвечу вам здесь от лица Cepanov Tech.'
+        '👋 Добро пожаловать в Cepanov Tech!
+
+💻 Разработка сайтов
+📱 Веб-приложения
+⚙️ Автоматизация бизнеса
+🎥 Видеонаблюдение
+🌐 Локальные сети
+🛠 IT-сопровождение
+
+Опишите вашу задачу одним сообщением.
+Мы ответим вам в этом чате в ближайшее время.'
       );
 
       if (fromChatId !== String(OWNER_CHAT_ID)) {
         await sendMessage(
           OWNER_CHAT_ID,
-          `овый пользователь
+          `Новый пользователь
 
-мя: ${name}
+Имя: ${name}
 Username: ${username}
 Chat ID: ${fromChatId}
 
-ля ответа:
+Для ответа:
 /reply ${fromChatId} текст ответа`
         );
       }
@@ -107,7 +117,7 @@ Chat ID: ${fromChatId}
       if (!targetChatId || !replyText) {
         await sendMessage(
           OWNER_CHAT_ID,
-          'равильный формат:\n/reply CHAT_ID текст сообщения'
+          'Правильный формат:\n/reply CHAT_ID текст сообщения'
         );
 
         return res.status(200).json({ ok: true });
@@ -118,8 +128,8 @@ Chat ID: ${fromChatId}
       await sendMessage(
         OWNER_CHAT_ID,
         sent
-          ? 'твет отправлен клиенту.'
-          : 'е удалось отправить ответ клиенту.'
+          ? 'Ответ отправлен клиенту.'
+          : 'Не удалось отправить ответ клиенту.'
       );
 
       return res.status(200).json({ ok: true });
@@ -130,14 +140,14 @@ Chat ID: ${fromChatId}
         OWNER_CHAT_ID,
         `Сообщение от клиента
 
-мя: ${name}
+Имя: ${name}
 Username: ${username}
 Chat ID: ${fromChatId}
 
 Сообщение:
 ${text || '[не текстовое сообщение]'}
 
-тветить:
+Ответить:
 /reply ${fromChatId} ваш текст`
       );
     }
