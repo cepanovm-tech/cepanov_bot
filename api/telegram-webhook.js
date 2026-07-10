@@ -31,9 +31,6 @@ async function sendMessage(chatId, text) {
 
 module.exports = async function handler(req, res) {
   try {
-    console.log('Webhook method:', req.method);
-    console.log('Webhook body:', JSON.stringify(req.body));
-
     if (req.method === 'GET') {
       return res.status(200).json({
         ok: true,
@@ -53,10 +50,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const message =
+    const body =
       typeof req.body === 'string'
-        ? JSON.parse(req.body).message
-        : req.body?.message;
+        ? JSON.parse(req.body)
+        : req.body;
+
+    const message = body?.message;
 
     if (!message) {
       return res.status(200).json({ ok: true });
@@ -77,23 +76,31 @@ module.exports = async function handler(req, res) {
     if (text === '/start') {
       await sendMessage(
         fromChatId,
-        '👋 Добро пожаловать в Cepanov Tech!
+`👋 Добро пожаловать в Cepanov Tech!
+
+🚀 Мы помогаем бизнесу внедрять современные IT-решения:
 
 💻 Разработка сайтов
 📱 Веб-приложения
 ⚙️ Автоматизация бизнеса
+🛠 IT-сопровождение
 🎥 Видеонаблюдение
 🌐 Локальные сети
-🛠 IT-сопровождение
 
-Опишите вашу задачу одним сообщением.
-Мы ответим вам в этом чате в ближайшее время.'
+✍️ Опишите вашу задачу одним сообщением.
+
+Желательно указать:
+• чем занимается ваша компания;
+• что необходимо реализовать;
+• есть ли сроки выполнения.
+
+📩 Мы изучим обращение и ответим вам в этом чате.`
       );
 
       if (fromChatId !== String(OWNER_CHAT_ID)) {
         await sendMessage(
           OWNER_CHAT_ID,
-          `Новый пользователь
+`Новый пользователь
 
 Имя: ${name}
 Username: ${username}
@@ -117,7 +124,7 @@ Chat ID: ${fromChatId}
       if (!targetChatId || !replyText) {
         await sendMessage(
           OWNER_CHAT_ID,
-          'Правильный формат:\n/reply CHAT_ID текст сообщения'
+          'Формат ответа:\n/reply CHAT_ID текст сообщения'
         );
 
         return res.status(200).json({ ok: true });
@@ -138,7 +145,7 @@ Chat ID: ${fromChatId}
     if (fromChatId !== String(OWNER_CHAT_ID)) {
       await sendMessage(
         OWNER_CHAT_ID,
-        `Сообщение от клиента
+`Сообщение от клиента
 
 Имя: ${name}
 Username: ${username}
