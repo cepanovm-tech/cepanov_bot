@@ -66,6 +66,31 @@ module.exports = async function handler(req, res) {
         ? JSON.parse(req.body)
         : req.body;
 
+    // Заявка из формы сайта Cepanov Tech
+    if (body?.source === 'cepanovtech-website') {
+      const clientName = clean(body.name) || 'Не указано';
+      const phone = clean(body.phone) || 'Не указан';
+      const email = clean(body.email) || 'Не указана';
+      const service = clean(body.service) || 'Не указана';
+      const description = clean(body.description) || 'Без описания';
+
+      const sent = await sendMessage(
+        OWNER_CHAT_ID,
+`📩 Новая заявка с сайта Cepanov Tech
+
+Имя: ${clientName}
+Телефон: ${phone}
+Email: ${email}
+Услуга: ${service}
+
+Описание:
+${description}`
+      );
+
+      return res.status(sent ? 200 : 502).json({
+        ok: Boolean(sent),
+      });
+    }
     const message = body?.message;
 
     if (!message) {
@@ -197,3 +222,4 @@ ${text || '[не текстовое сообщение]'}
     });
   }
 };
+
